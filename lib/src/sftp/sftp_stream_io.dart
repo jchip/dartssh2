@@ -31,8 +31,10 @@ class SftpFileWriter with DoneFuture {
   /// Creates a new [SftpFileWriter]. The upload process is started immediately
   /// after construction.
   SftpFileWriter(this.file, this.stream, this.offset, this.onProgress) {
-    _subscription =
-        stream.transform(MaxChunkSize(chunkSize)).listen(_handleLocalData);
+    _subscription = stream.transform(MaxChunkSize(chunkSize)).listen(
+      _handleLocalData,
+      onError: _handleStreamError,
+    );
 
     _subscription.onDone(_handleLocalDone);
   }
@@ -98,24 +100,51 @@ class SftpFileWriter with DoneFuture {
   /// at the appropriate offset, updates the counters, and triggers the
   /// progress callback. Finally, it checks if all data has been acknowledged
   /// and completes the operation if done.
-  Future<void> _handleLocalData(Uint8List chunk) async {
+  /// Pending write futures for pipelined writes.
+  final _pendingWrites = <Future<void>>[];
+
+  void _handleLocalData(Uint8List chunk) {
+    if (_doneCompleter.isCompleted) return;
+
     if (_bytesOnTheWire >= maxBytesOnTheWire) {
       _subscription.pause();
-    } else {
-      _subscription.resume();
     }
 
     final chunkWriteOffset = offset + _bytesSent;
     _bytesSent += chunk.length;
-    await file.writeBytes(chunk, offset: chunkWriteOffset);
 
-    _bytesAcked += chunk.length;
-    onProgress?.call(_bytesAcked);
+    // DS2-29: Fire write without awaiting; use flow control for pipelining.
+    final writeFuture = file
+        .writeBytes(chunk, offset: chunkWriteOffset)
+        .then((_) {
+      _bytesAcked += chunk.length;
+      onProgress?.call(_bytesAcked);
 
-    if (_bytesOnTheWire < maxBytesOnTheWire) {
-      _subscription.resume();
+      if (_bytesOnTheWire < maxBytesOnTheWire && !_streamDone) {
+        _subscription.resume();
+      }
+
+      _checkDone();
+    }).catchError((Object error, StackTrace stackTrace) {
+      // DS2-27: Handle write errors gracefully.
+      if (!_doneCompleter.isCompleted) {
+        _doneCompleter.completeError(error, stackTrace);
+        _subscription.cancel();
+      }
+    });
+
+    _pendingWrites.add(writeFuture);
+    writeFuture.whenComplete(() => _pendingWrites.remove(writeFuture));
+  }
+
+  void _handleStreamError(Object error, StackTrace stackTrace) {
+    if (!_doneCompleter.isCompleted) {
+      _doneCompleter.completeError(error, stackTrace);
+      _subscription.cancel();
     }
+  }
 
+  void _checkDone() {
     if (_streamDone &&
         _bytesSent == _bytesAcked &&
         !_doneCompleter.isCompleted) {
@@ -131,9 +160,7 @@ class SftpFileWriter with DoneFuture {
   /// if no more data remains to be processed.
   void _handleLocalDone() {
     _streamDone = true;
-    if (_bytesSent == _bytesAcked) {
-      _doneCompleter.complete();
-    }
+    _checkDone();
   }
 }
 
