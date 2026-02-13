@@ -21,6 +21,12 @@ class SSHKexX25519 implements SSHKexECDH {
   @override
   BigInt computeSecret(Uint8List remotePublicKey) {
     final secret = _ScalarMult.scalseMult(privateKey, remotePublicKey);
+    // RFC 8731 Section 3: check that the shared secret is not all zeros.
+    // A small-order public key from a malicious peer yields a zero shared
+    // secret which would compromise the key exchange.
+    if (secret.every((b) => b == 0)) {
+      throw StateError('Curve25519 shared secret is all zeros');
+    }
     return decodeBigIntWithSign(1, secret);
   }
 }

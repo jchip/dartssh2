@@ -47,6 +47,17 @@ void main() {
           throwsA(isA<ArgumentError>()));
     });
 
+    test('should reject all-zeros shared secret (small-order public key)', () {
+      // A small-order point on Curve25519 that produces an all-zeros
+      // shared secret. The point of order 1 (the identity) is all zeros.
+      final smallOrderKey = Uint8List(32); // all zeros
+
+      expect(
+        () => kex.computeSecret(smallOrderKey),
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('should handle valid inputs for scalar multiplication indirectly', () {
       // This test is intended to indirectly verify the behavior of scalar multiplication
       // through the public method computeSecret.
