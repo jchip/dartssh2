@@ -88,9 +88,8 @@ int crypto_hash_sha512(Uint8List out, Uint8List m, int mlen) {
   return TweetNaCl.crypto_hash(out, Uint8List.sublistView(m, 0, mlen));
 }
 
-var BLF_J = 0;
-
 class Blowfish {
+  int _blfJ = 0;
   List<Uint32List> S = [
     Uint32List.fromList([
       0xd1310ba6,
@@ -1176,11 +1175,11 @@ class Blowfish {
     var d = Uint32List(2);
     var d8 = d.buffer.asUint8List();
 
-    BLF_J = 0;
+    _blfJ = 0;
     for (var i = 0; i < 18; i++) {
-      P[i] ^= stream2word(key, keybytes);
+      P[i] ^= _stream2word(key, keybytes);
     }
-    BLF_J = 0;
+    _blfJ = 0;
 
     for (var i = 0; i < 18; i += 2) {
       encipher(d, d8);
@@ -1200,15 +1199,15 @@ class Blowfish {
   void expandstate(Uint8List data, int databytes, Uint8List key, int keybytes) {
     var d = Uint32List(2);
 
-    BLF_J = 0;
+    _blfJ = 0;
     for (var i = 0; i < 18; i++) {
-      P[i] ^= stream2word(key, keybytes);
+      P[i] ^= _stream2word(key, keybytes);
     }
 
-    BLF_J = 0;
+    _blfJ = 0;
     for (var i = 0; i < 18; i += 2) {
-      d[0] ^= stream2word(data, databytes);
-      d[1] ^= stream2word(data, databytes);
+      d[0] ^= _stream2word(data, databytes);
+      d[1] ^= _stream2word(data, databytes);
       encipher(d);
       P[i] = d[0];
       P[i + 1] = d[1];
@@ -1216,14 +1215,23 @@ class Blowfish {
 
     for (var i = 0; i < 4; i++) {
       for (var k = 0; k < 256; k += 2) {
-        d[0] ^= stream2word(data, databytes);
-        d[1] ^= stream2word(data, databytes);
+        d[0] ^= _stream2word(data, databytes);
+        d[1] ^= _stream2word(data, databytes);
         encipher(d);
         S[i][k] = d[0];
         S[i][k + 1] = d[1];
       }
     }
-    BLF_J = 0;
+    _blfJ = 0;
+  }
+
+  int _stream2word(Uint8List data, int databytes) {
+    var temp = 0;
+    for (var i = 0; i < 4; i++, _blfJ++) {
+      if (_blfJ >= databytes) _blfJ = 0;
+      temp = (temp << 8) | data[_blfJ];
+    }
+    return temp;
   }
 
   void enc(Uint32List data, int blocks) {
@@ -1234,7 +1242,7 @@ class Blowfish {
 
   void dec(Uint32List data, int blocks) {
     for (var i = 0; i < blocks; i++) {
-      encipher(Uint32List.sublistView(data, i * 2));
+      decipher(Uint32List.sublistView(data, i * 2));
     }
   }
 }
@@ -1244,14 +1252,6 @@ int F(List<Uint32List> S, x8, i) {
       S[3][x8[i]]);
 }
 
-int stream2word(Uint8List data, int databytes) {
-  var temp = 0;
-  for (var i = 0; i < 4; i++, BLF_J++) {
-    if (BLF_J >= databytes) BLF_J = 0;
-    temp = (temp << 8) | data[BLF_J];
-  }
-  return temp;
-}
 
 const BCRYPT_BLOCKS = 8;
 const BCRYPT_HASHSIZE = 32;
@@ -1269,7 +1269,7 @@ void bcrypt_hash(Uint8List sha2pass, Uint8List sha2salt, Uint8List out) {
   }
 
   for (var i = 0; i < BCRYPT_BLOCKS; i++) {
-    cdata[i] = stream2word(ciphertext, ciphertext.lengthInBytes);
+    cdata[i] = state._stream2word(ciphertext, ciphertext.lengthInBytes);
   }
 
   for (var i = 0; i < 64; i++) {
