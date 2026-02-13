@@ -42,6 +42,16 @@ class SSHEcdsaPublicKey implements SSHHostKey {
     Uint8List message,
     SSHEcdsaSignature signature,
   ) {
+    final n = curve.n;
+
+    // Validate r,s are in [1, n-1]
+    if (signature.r <= BigInt.zero || signature.r >= n) return false;
+    if (signature.s <= BigInt.zero || signature.s >= n) return false;
+
+    // Low-S enforcement: reject if s > n/2 (signature malleability)
+    final halfN = n >> 1;
+    if (signature.s > halfN) return false;
+
     final signer = ECDSASigner(curveHash);
 
     signer.init(
