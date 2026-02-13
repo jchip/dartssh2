@@ -59,7 +59,8 @@ class SSHMessageReader {
   }
 
   Uint8List readBytes(int length) {
-    final value = Uint8List.view(_byteData.buffer, _offset, length);
+    final value = Uint8List.view(
+        _byteData.buffer, _byteData.offsetInBytes + _offset, length);
     _offset += length;
     return value;
   }
