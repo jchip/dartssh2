@@ -60,7 +60,7 @@ class SftpInitPacket implements SftpPacket {
     reader.readUint8(); // packet type
     final version = reader.readUint32();
     final extensions = <String, String>{};
-    while (reader.isDone) {
+    while (!reader.isDone) {
       final name = reader.readUtf8();
       final value = reader.readUtf8();
       extensions[name] = value;
@@ -763,8 +763,8 @@ class SftpSymlinkPacket implements SftpRequestPacket {
     final reader = SSHMessageReader(data);
     reader.readUint8(); // packet type
     final requestId = reader.readUint32();
-    final linkPath = reader.readUtf8();
     final targetPath = reader.readUtf8();
+    final linkPath = reader.readUtf8();
     return SftpSymlinkPacket(requestId, linkPath, targetPath);
   }
 
@@ -773,8 +773,8 @@ class SftpSymlinkPacket implements SftpRequestPacket {
     final writer = SSHMessageWriter();
     writer.writeUint8(packetType);
     writer.writeUint32(requestId);
-    writer.writeUtf8(linkPath);
     writer.writeUtf8(targetPath);
+    writer.writeUtf8(linkPath);
     return writer.takeBytes();
   }
 
@@ -1031,7 +1031,7 @@ class SftpExtendedReplyPacket implements SftpResponsePacket {
     final writer = SSHMessageWriter();
     writer.writeUint8(packetType);
     writer.writeUint32(requestId);
-    writer.writeString(payload);
+    writer.writeBytes(payload);
     return writer.takeBytes();
   }
 
