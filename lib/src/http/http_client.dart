@@ -127,6 +127,8 @@ class SSHHttpClientRequest {
 
     headers.forEach((name, values) {
       for (var value in values) {
+        validateHttpHeaderField(name);
+        validateHttpHeaderField(value);
         buffer.write('$name: $value\r\n');
       }
     });
@@ -140,6 +142,16 @@ class SSHHttpClientRequest {
     final socket = await client.forwardLocal(uri.host, uri.port);
     socket.sink.add(buffer.toString().codeUnits);
     return SSHHttpClientResponse.from(socket);
+  }
+}
+
+/// Validates that an HTTP header field does not contain CR or LF characters
+/// which could enable header injection attacks.
+void validateHttpHeaderField(String value) {
+  if (value.contains('\r') || value.contains('\n')) {
+    throw SSHHttpException(
+      'HTTP header field contains invalid characters (CR or LF)',
+    );
   }
 }
 
