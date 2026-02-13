@@ -429,7 +429,7 @@ class SSHClient {
     session.stdout.listen(
       stdout ? result.add : (_) {},
       onDone: stdoutDone.complete,
-      onError: stderrDone.completeError,
+      onError: stdoutDone.completeError,
     );
 
     session.stderr.listen(
@@ -582,7 +582,36 @@ class SSHClient {
     final message = SSH_Message_Userauth_Failure.decode(payload);
     printTrace?.call('<- $socket: $message');
     printDebug?.call('SSHClient._handleUserauthFailure');
+
+    // RFC 4252 Section 5.1: Update auth methods based on server's response.
+    // Filter _authMethodsLeft to only include methods the server supports.
+    final serverMethods = _parseServerAuthMethods(message.methodsLeft);
+    _authMethodsLeft.retainWhere(
+      (method) => serverMethods.contains(method),
+    );
+
     _tryNextAuthMethod();
+  }
+
+  Set<SSHAuthMethod> _parseServerAuthMethods(List<String> methodNames) {
+    final methods = <SSHAuthMethod>{};
+    for (final name in methodNames) {
+      switch (name) {
+        case 'password':
+          methods.add(SSHAuthMethod.password);
+          break;
+        case 'publickey':
+          methods.add(SSHAuthMethod.publicKey);
+          break;
+        case 'keyboard-interactive':
+          methods.add(SSHAuthMethod.keyboardInteractive);
+          break;
+        case 'none':
+          methods.add(SSHAuthMethod.none);
+          break;
+      }
+    }
+    return methods;
   }
 
   void _handleUserauthIntermidiate(Uint8List payload) {
@@ -704,7 +733,7 @@ class SSHClient {
     }
 
     if (remoteForward.filter != null) {
-      if (!remoteForward.filter!(message.host!, message.port!)) {
+      if (!remoteForward.filter!(message.originatorIP!, message.originatorPort!)) {
         printDebug?.call('remote forward rejected by filter: $message');
         final reply = SSH_Message_Channel_Open_Failure(
           recipientChannel: message.senderChannel,
