@@ -140,9 +140,10 @@ class SSH_Message_Userauth_Request extends SSHMessage {
           );
         }
       case 'publickey':
+        final hasSignature = reader.readBool();
         final publicKeyAlgorithm = reader.readUtf8();
         final publicKey = reader.readString();
-        final signature = reader.readString();
+        final signature = hasSignature ? reader.readString() : null;
         return SSH_Message_Userauth_Request.publicKey(
           username: user,
           serviceName: serviceName,
