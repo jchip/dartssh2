@@ -356,37 +356,61 @@ class SSHTransport {
       throw SSHHandshakeError('Version exchange too long');
     }
 
-    final bufferString = latin1.decode(_buffer.data);
+    // RFC 4253 Section 4.2: The server MAY send other lines of data before
+    // sending the version string. Each line SHOULD be terminated by \r\n.
+    // Lines that do not begin with 'SSH-' SHOULD be silently ignored.
+    // We loop to skip any non-SSH banner lines.
+    while (true) {
+      final bufferString = latin1.decode(_buffer.data);
 
-    // SSH version exchange is terminated by \r\n.
-    var index = bufferString.indexOf('\r\n');
-    if (index == -1) {
-      // In the (rare) case SSH-2 version string is terminated by \n only (observed on Synology DS120j 2021)
-      index = bufferString.indexOf('\n');
+      // SSH version exchange is terminated by \r\n.
+      var index = bufferString.indexOf('\r\n');
+      int consumeExtra;
       if (index == -1) {
-        throw SSHHandshakeError('Version exchange not terminated');
+        // In the (rare) case SSH-2 version string is terminated by \n only
+        // (observed on Synology DS120j 2021)
+        index = bufferString.indexOf('\n');
+        if (index == -1) {
+          // DS2-12: No complete line yet; wait for more data instead of throwing.
+          return;
+        }
+        consumeExtra = 1; // consume \n
+      } else {
+        consumeExtra = 2; // consume \r\n
       }
-      _buffer.consume(index + 1);
-    } else {
-      _buffer.consume(index + 2);
+
+      final line = bufferString.substring(0, index);
+      _buffer.consume(index + consumeExtra);
+
+      // DS2-11: RFC 4253 Section 4.2 - skip lines that don't start with 'SSH-'.
+      if (!line.startsWith('SSH-')) {
+        printTrace?.call('<- $socket (banner): $line');
+        // Continue processing; there may be more lines in the buffer,
+        // or we may need to wait for more data.
+        if (_buffer.isEmpty) {
+          return;
+        }
+        continue;
+      }
+
+      // Line starts with 'SSH-', verify it is SSH-2.0.
+      if (!line.startsWith('SSH-2.0-')) {
+        socket.sink.add(latin1.encode('Protocol mismatch\r\n'));
+        throw SSHHandshakeError('Invalid version: $line');
+      }
+
+      printTrace?.call('<- $socket: $line');
+      printDebug?.call('SSHTransport._remoteVersion = "$line"');
+      _remoteVersion = line;
+
+      if (isServer) {
+        _sendKexInit();
+      }
+
+      // There maybe more data in the buffer, so process it.
+      _processPackets();
+      return;
     }
-
-    final versionString = bufferString.substring(0, index);
-    if (!versionString.startsWith('SSH-2.0-')) {
-      socket.sink.add(latin1.encode('Protocol mismatch\r\n'));
-      throw SSHHandshakeError('Invalid version: $versionString');
-    }
-
-    printTrace?.call('<- $socket: $versionString');
-    printDebug?.call('SSHTransport._remoteVersion = "$versionString"');
-    _remoteVersion = versionString;
-
-    if (isServer) {
-      _sendKexInit();
-    }
-
-    // There maybe more data in the buffer, so process it.
-    _processPackets();
   }
 
   /// Process one or more SSH packets queued in [_buffer].
