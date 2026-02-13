@@ -121,16 +121,18 @@ class SSH_Message_Userauth_Request extends SSHMessage {
     switch (methodName) {
       case 'password':
         final hasNewPassword = reader.readBool();
-        final password = reader.readUtf8();
         if (hasNewPassword) {
+          // RFC 4252 Section 8: wire order is old password, then new password
           final oldPassword = reader.readUtf8();
+          final newPassword = reader.readUtf8();
           return SSH_Message_Userauth_Request.newPassword(
             user: user,
             oldPassword: oldPassword,
-            newPassword: password,
+            newPassword: newPassword,
             serviceName: serviceName,
           );
         } else {
+          final password = reader.readUtf8();
           return SSH_Message_Userauth_Request.password(
             user: user,
             password: password,
