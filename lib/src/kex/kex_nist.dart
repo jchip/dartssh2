@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_kex.dart';
 import 'package:dartssh2/src/utils/bigint.dart';
 import 'package:dartssh2/src/utils/list.dart';
@@ -38,10 +39,29 @@ class SSHKexNist implements SSHKexECDH {
   SSHKexNist.p521() : this(curve: ECCurve_secp521r1(), secretBits: 521);
 
   /// Compute shared secret.
+  /// RFC 5656 Section 4: client MUST verify remote public key is valid.
   @override
   BigInt computeSecret(Uint8List remotePubilcKey) {
-    final s = curve.curve.decodePoint(remotePubilcKey)!;
-    return (s * privateKey)!.x!.toBigInteger()!;
+    final s = curve.curve.decodePoint(remotePubilcKey);
+    if (s == null || s.isInfinity) {
+      throw SSHHandshakeError('ECDH remote public key is the point at infinity');
+    }
+    // Validate point is on the curve: y² = x³ + ax + b (mod p)
+    final x = s.x!.toBigInteger()!;
+    final y = s.y!.toBigInteger()!;
+    final a = curve.curve.a!.toBigInteger()!;
+    final b = curve.curve.b!.toBigInteger()!;
+    final p = (curve.curve as dynamic).q as BigInt;
+    final lhs = (y * y) % p;
+    final rhs = (x * x * x + a * x + b) % p;
+    if (lhs != rhs) {
+      throw SSHHandshakeError('ECDH remote public key is not on the curve');
+    }
+    final result = (s * privateKey)!;
+    if (result.isInfinity) {
+      throw SSHHandshakeError('ECDH shared secret is the point at infinity');
+    }
+    return result.x!.toBigInteger()!;
   }
 
   BigInt _generatePrivateKey() {

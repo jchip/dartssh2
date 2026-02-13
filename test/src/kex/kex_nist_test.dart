@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dartssh2/src/kex/kex_nist.dart';
 import 'package:test/test.dart';
 
@@ -65,6 +67,30 @@ void main() {
           reason: 'Private key should not be zero.');
       expect(privateKey < kex.curve.n, isTrue,
           reason: 'Private key should be less than curve order.');
+    });
+
+    test('should reject point at infinity (all zeros)', () {
+      final kex = SSHKexNist.p256();
+      // Point at infinity is encoded as a single 0x00 byte
+      expect(
+        () => kex.computeSecret(Uint8List.fromList([0x00])),
+        throwsA(anything),
+      );
+    });
+
+    test('should reject invalid point not on curve', () {
+      final kex = SSHKexNist.p256();
+      // Construct an uncompressed point with invalid coordinates
+      // 0x04 prefix + 32 bytes x + 32 bytes y (all 0x01 = not on curve)
+      final invalidPoint = Uint8List(65);
+      invalidPoint[0] = 0x04; // uncompressed
+      for (var i = 1; i < 65; i++) {
+        invalidPoint[i] = 0x01;
+      }
+      expect(
+        () => kex.computeSecret(invalidPoint),
+        throwsA(anything),
+      );
     });
   });
 }
