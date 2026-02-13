@@ -10,7 +10,6 @@ import 'package:pointycastle/asymmetric/api.dart' as asymmetric;
 import 'package:pointycastle/digests/sha1.dart';
 import 'package:pointycastle/digests/sha256.dart';
 import 'package:pointycastle/digests/sha512.dart';
-import 'package:pointycastle/random/fortuna_random.dart';
 import 'package:pointycastle/signers/rsa_signer.dart';
 
 class SSHRsaPublicKey implements SSHHostKey {
@@ -61,11 +60,8 @@ class SSHRsaPublicKey implements SSHHostKey {
 
     signer.init(
       false,
-      ParametersWithRandom(
-        PublicKeyParameter<asymmetric.RSAPublicKey>(
-          asymmetric.RSAPublicKey(n, e),
-        ),
-        FortunaRandom(),
+      PublicKeyParameter<asymmetric.RSAPublicKey>(
+        asymmetric.RSAPublicKey(n, e),
       ),
     );
 
