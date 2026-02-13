@@ -137,7 +137,7 @@ class SSHChannelController {
         recipientChannel: remoteId,
         variableName: name,
         variableValue: value,
-        wantReply: true,
+        wantReply: false,
       ),
     );
   }
