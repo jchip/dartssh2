@@ -235,10 +235,9 @@ class SSHTransport {
       payloadToEncrypt.setRange(1, 1 + data.length, data); // Copy data
 
       // Add random padding
-      for (var i = 0; i < adjustedPaddingLength; i++) {
-        payloadToEncrypt[1 + data.length + i] =
-            (DateTime.now().microsecondsSinceEpoch + i) & 0xFF;
-      }
+      final paddingBytes = randomBytes(adjustedPaddingLength);
+      payloadToEncrypt.setRange(
+          1 + data.length, 1 + data.length + adjustedPaddingLength, paddingBytes);
 
       // Verify that the payload length is a multiple of the block size
       if (payloadToEncrypt.length % blockSize != 0) {
