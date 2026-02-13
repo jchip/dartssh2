@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/message/msg_channel.dart';
+import 'package:dartssh2/src/message/msg_request.dart';
 import 'package:dartssh2/src/ssh_client.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/socket/ssh_socket.dart';
@@ -78,6 +80,64 @@ void main() {
         ),
       );
       expect(client.pendingGlobalRequestReplyWaiters, equals(0));
+      expect(client.pendingChannelOpenReplyWaiters, equals(0));
+
+      socket.destroy();
+    });
+
+    test('dispatches global request reply to pending waiter', () async {
+      final socket = _MockSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'test',
+        keepAliveInterval: null,
+      );
+
+      final waiter = client.waitGlobalRequestReplyForTesting();
+      expect(client.pendingGlobalRequestReplyWaiters, equals(1));
+
+      client.handlePacket(
+        SSH_Message_Request_Success(Uint8List.fromList([1, 2, 3])).encode(),
+      );
+
+      final reply = await waiter;
+      expect(reply, isA<SSH_Message_Request_Success>());
+      expect(
+        (reply as SSH_Message_Request_Success).requestData,
+        Uint8List.fromList([1, 2, 3]),
+      );
+      expect(client.pendingGlobalRequestReplyWaiters, equals(0));
+
+      socket.destroy();
+    });
+
+    test('dispatches channel-open confirmation to matching waiter', () async {
+      final socket = _MockSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'test',
+        keepAliveInterval: null,
+      );
+
+      final waiter = client.waitChannelOpenReplyForTesting(7);
+      expect(client.pendingChannelOpenReplyWaiters, equals(1));
+
+      client.handlePacket(
+        SSH_Message_Channel_Confirmation(
+          recipientChannel: 7,
+          senderChannel: 9,
+          initialWindowSize: 2048,
+          maximumPacketSize: 1024,
+          data: Uint8List(0),
+        ).encode(),
+      );
+
+      final reply = await waiter;
+      expect(reply, isA<SSH_Message_Channel_Confirmation>());
+      expect(
+        (reply as SSH_Message_Channel_Confirmation).senderChannel,
+        equals(9),
+      );
       expect(client.pendingChannelOpenReplyWaiters, equals(0));
 
       socket.destroy();
