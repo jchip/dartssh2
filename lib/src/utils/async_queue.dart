@@ -33,4 +33,11 @@ class AsyncQueue<T> {
       _data.add(value);
     }
   }
+
+  /// Completes all pending waiters with an error.
+  void completeError(Object error, [StackTrace? stackTrace]) {
+    while (_completers.isNotEmpty) {
+      _completers.removeFirst().completeError(error, stackTrace);
+    }
+  }
 }

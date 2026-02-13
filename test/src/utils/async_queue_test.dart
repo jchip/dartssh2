@@ -105,5 +105,18 @@ void main() {
       expect(stringQueue.next, equals('hello'));
       expect(stringQueue.next, equals('world'));
     });
+
+    test('completeError completes all pending waiters with error', () async {
+      final f1 = queue.next as Future<int>;
+      final f2 = queue.next as Future<int>;
+      final error = StateError('closed');
+
+      queue.completeError(error);
+
+      await expectLater(f1, throwsA(same(error)));
+      await expectLater(f2, throwsA(same(error)));
+      expect(queue.hasWaiters, isFalse);
+      expect(queue.length, equals(0));
+    });
   });
 }

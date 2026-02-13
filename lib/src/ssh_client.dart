@@ -482,6 +482,15 @@ class SSHClient {
     }
     _keepAlive?.stop();
 
+    final error = SSHStateError('Connection closed');
+    _globalRequestReplyQueue.completeError(error);
+    _channelOpenReplyWaiters.forEach((_, waiter) {
+      if (!waiter.isCompleted) {
+        waiter.completeError(error);
+      }
+    });
+    _channelOpenReplyWaiters.clear();
+
     try {
       _closeChannels();
     } catch (e) {
@@ -500,6 +509,28 @@ class SSHClient {
   /// Handles a raw SSH packet. This method is only exposed for testing purposes.
   @visibleForTesting
   void handlePacket(Uint8List packet) => _handlePacket(packet);
+
+  /// Number of pending global request waiters.
+  @visibleForTesting
+  int get pendingGlobalRequestReplyWaiters => _globalRequestReplyQueue.length;
+
+  /// Number of pending channel open waiters.
+  @visibleForTesting
+  int get pendingChannelOpenReplyWaiters => _channelOpenReplyWaiters.length;
+
+  /// Wait for a global request reply (testing only).
+  @visibleForTesting
+  Future<SSHMessage> waitGlobalRequestReplyForTesting() =>
+      Future.value(_globalRequestReplyQueue.next);
+
+  /// Wait for a channel open reply (testing only).
+  @visibleForTesting
+  Future<SSHMessage> waitChannelOpenReplyForTesting(SSHChannelId id) =>
+      _waitChannelOpenReply(id);
+
+  /// Simulates transport close (testing only).
+  @visibleForTesting
+  void handleTransportClosedForTesting() => _handleTransportClosed();
 
   void _sendMessage(SSHMessage message) {
     printTrace?.call('-> $socket: $message');
@@ -733,7 +764,8 @@ class SSHClient {
     }
 
     if (remoteForward.filter != null) {
-      if (!remoteForward.filter!(message.originatorIP!, message.originatorPort!)) {
+      if (!remoteForward.filter!(
+          message.originatorIP!, message.originatorPort!)) {
         printDebug?.call('remote forward rejected by filter: $message');
         final reply = SSH_Message_Channel_Open_Failure(
           recipientChannel: message.senderChannel,
