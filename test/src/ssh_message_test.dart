@@ -63,6 +63,97 @@ void main() {
       expect(reader.readBool(), false);
       expect(reader.readBool(), true);
     });
+
+    test('readNameList returns empty list for empty name-list', () {
+      // An empty name-list is a zero-length string: uint32(0)
+      final writer = SSHMessageWriter();
+      writer.writeNameList([]);
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final list = reader.readNameList();
+      expect(list, isEmpty);
+      expect(list, equals([]));
+    });
+
+    test('readNameList returns single item for one name', () {
+      final writer = SSHMessageWriter();
+      writer.writeNameList(['ssh-rsa']);
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final list = reader.readNameList();
+      expect(list, equals(['ssh-rsa']));
+    });
+
+    test('readNameList returns multiple items for comma-separated names', () {
+      final writer = SSHMessageWriter();
+      writer.writeNameList(['ssh-rsa', 'ssh-ed25519', 'ecdsa-sha2-nistp256']);
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final list = reader.readNameList();
+      expect(list, equals(['ssh-rsa', 'ssh-ed25519', 'ecdsa-sha2-nistp256']));
+    });
+
+    test('readMpint returns zero for empty mpint', () {
+      // mpint with zero length data
+      final writer = SSHMessageWriter();
+      writer.writeMpint(BigInt.zero);
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final value = reader.readMpint();
+      expect(value, equals(BigInt.zero));
+    });
+
+    test('readMpint reads positive values correctly', () {
+      final writer = SSHMessageWriter();
+      writer.writeMpint(BigInt.from(255));
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final value = reader.readMpint();
+      expect(value, equals(BigInt.from(255)));
+    });
+
+    test('readMpint reads negative values correctly (high bit set)', () {
+      // RFC 4251 example: value -1 is represented as 0xFF
+      // Manually construct an mpint with magnitude [0xFF]
+      // which has high bit set, meaning negative in two's complement
+      final data = Uint8List.fromList([
+        0x00, 0x00, 0x00, 0x01, // length = 1
+        0xFF, // magnitude with high bit set => negative
+      ]);
+
+      final reader = SSHMessageReader(data);
+      final value = reader.readMpint();
+      expect(value.isNegative, isTrue);
+    });
+
+    test('readMpint reads positive value with leading zero pad', () {
+      // A value like 128 (0x80) needs a leading 0x00 to stay positive
+      // because 0x80 has high bit set
+      final writer = SSHMessageWriter();
+      writer.writeMpint(BigInt.from(128));
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final value = reader.readMpint();
+      expect(value, equals(BigInt.from(128)));
+      expect(value.isNegative, isFalse);
+    });
+
+    test('readMpint round-trip for large positive value', () {
+      final bigValue = BigInt.parse('123456789012345678901234567890');
+      final writer = SSHMessageWriter();
+      writer.writeMpint(bigValue);
+      final bytes = writer.takeBytes();
+
+      final reader = SSHMessageReader(bytes);
+      final value = reader.readMpint();
+      expect(value, equals(bigValue));
+    });
   });
 
   group('SSHMessageWriter', () {

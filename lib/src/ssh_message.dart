@@ -78,6 +78,7 @@ class SSHMessageReader {
 
   List<String> readNameList() {
     final string = utf8.decode(readString());
+    if (string.isEmpty) return [];
     final list = string.split(',');
     return list;
   }
@@ -92,7 +93,9 @@ class SSHMessageReader {
 
   BigInt readMpint() {
     final magnitude = readString();
-    final value = decodeBigIntWithSign(1, magnitude);
+    if (magnitude.isEmpty) return BigInt.zero;
+    final sign = (magnitude[0] & 0x80) != 0 ? -1 : 1;
+    final value = decodeBigIntWithSign(sign, magnitude);
     return value;
   }
 
