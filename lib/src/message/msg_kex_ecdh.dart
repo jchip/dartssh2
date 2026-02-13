@@ -69,8 +69,9 @@ class SSH_Message_KexECDH_Reply implements SSHMessage {
   Uint8List encode() {
     final writer = SSHMessageWriter();
     writer.writeUint8(messageId);
-    writer.writeString(ecdhPublicKey);
+    // RFC 5656 Section 4: K_S (host key) first, then Q_S (ECDH key)
     writer.writeString(hostPublicKey);
+    writer.writeString(ecdhPublicKey);
     writer.writeString(signature);
     return writer.takeBytes();
   }
