@@ -57,6 +57,33 @@ void main() {
       final computedSecret = kex.computeSecret(f);
       expect(computedSecret, equals(isA<BigInt>()));
     });
+
+    test('should reject f = 0', () {
+      final kex = SSHKexDH.group14();
+      expect(() => kex.computeSecret(BigInt.zero), throwsA(anything));
+    });
+
+    test('should reject f = 1', () {
+      final kex = SSHKexDH.group14();
+      expect(() => kex.computeSecret(BigInt.one), throwsA(anything));
+    });
+
+    test('should reject f = p - 1', () {
+      final kex = SSHKexDH.group14();
+      expect(() => kex.computeSecret(kex.p - BigInt.one), throwsA(anything));
+    });
+
+    test('should reject f = p', () {
+      final kex = SSHKexDH.group14();
+      expect(() => kex.computeSecret(kex.p), throwsA(anything));
+    });
+
+    test('should accept valid f value', () {
+      final kex1 = SSHKexDH.group14();
+      final kex2 = SSHKexDH.group14();
+      // e values are valid f values since they are g^x mod p
+      expect(() => kex1.computeSecret(kex2.e), returnsNormally);
+    });
   });
 }
 

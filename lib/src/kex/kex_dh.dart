@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_kex.dart';
 import 'package:dartssh2/src/utils/bigint.dart';
 import 'package:dartssh2/src/utils/list.dart';
@@ -46,8 +47,20 @@ class SSHKexDH implements SSHKex {
   }
 
   /// Compute the shared secret K
+  /// RFC 4253 Section 8: client MUST verify 1 < f < p-1
   BigInt computeSecret(BigInt f) {
-    return f.modPow(x, p);
+    if (f <= BigInt.one || f >= p - BigInt.one) {
+      throw SSHHandshakeError(
+        'DH parameter f is out of range: must satisfy 1 < f < p-1',
+      );
+    }
+    final k = f.modPow(x, p);
+    if (k <= BigInt.one) {
+      throw SSHHandshakeError(
+        'DH shared secret K is out of range: must be > 1',
+      );
+    }
+    return k;
   }
 }
 
