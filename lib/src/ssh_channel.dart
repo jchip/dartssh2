@@ -316,13 +316,16 @@ class SSHChannelController {
   }
 
   void _sendWindowAdjustIfNeeded() {
-    printDebug?.call('SSHChannel._sendWindowAdjustIfNeeded');
-
     if (_done.isCompleted) return;
     if (_remoteStream.isPaused) return;
-    if (_localWindow <= 0) return;
 
     final bytesToAdd = localInitialWindowSize - _localWindow;
+    if (bytesToAdd <= 0) return;
+
+    printDebug?.call(
+      'SSHChannel._sendWindowAdjustIfNeeded: bytesToAdd=$bytesToAdd '
+      'localWindow=$_localWindow',
+    );
     _localWindow = localInitialWindowSize;
 
     sendMessage(

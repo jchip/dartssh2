@@ -136,6 +136,52 @@ void main() {
       controller.destroy();
     });
 
+    test('resume reopens the receive window after it is fully exhausted',
+        () async {
+      final sentMessages = <SSHMessage>[];
+      final controller = SSHChannelController(
+        localId: 1,
+        localMaximumPacketSize: 32768,
+        localInitialWindowSize: 64,
+        remoteId: 42,
+        remoteMaximumPacketSize: 32768,
+        remoteInitialWindowSize: 64,
+        sendMessage: sentMessages.add,
+      );
+
+      final sub = controller.channel.stream.listen((_) {});
+      sub.pause();
+
+      controller.handleMessage(
+        SSH_Message_Channel_Data(
+          recipientChannel: controller.localId,
+          data: Uint8List(32),
+        ),
+      );
+      controller.handleMessage(
+        SSH_Message_Channel_Data(
+          recipientChannel: controller.localId,
+          data: Uint8List(32),
+        ),
+      );
+
+      expect(
+        sentMessages.whereType<SSH_Message_Channel_Window_Adjust>(),
+        isEmpty,
+      );
+
+      sub.resume();
+      await Future<void>.delayed(Duration.zero);
+
+      final adjustMessages =
+          sentMessages.whereType<SSH_Message_Channel_Window_Adjust>().toList();
+      expect(adjustMessages.length, 1);
+      expect(adjustMessages.single.bytesToAdd, 64);
+
+      await sub.cancel();
+      controller.destroy();
+    });
+
     test('splits outgoing channel data to remote maximum packet size',
         () async {
       final sentMessages = <SSHMessage>[];
