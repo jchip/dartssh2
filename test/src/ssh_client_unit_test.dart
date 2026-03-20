@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dartssh2/src/message/msg_channel.dart';
 import 'package:dartssh2/src/message/msg_request.dart';
+import 'package:dartssh2/src/message/msg_userauth.dart';
 import 'package:dartssh2/src/ssh_client.dart';
 import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/socket/ssh_socket.dart';
@@ -139,6 +140,62 @@ void main() {
         equals(9),
       );
       expect(client.pendingChannelOpenReplyWaiters, equals(0));
+
+      socket.destroy();
+    });
+  });
+
+  group('SSHClient session channel sizing', () {
+    test('shell uses custom local initial window size for session channels',
+        () async {
+      final socket = _MockSSHSocket();
+      final traceLines = <String>[];
+      final client = SSHClient(
+        socket,
+        username: 'test',
+        keepAliveInterval: null,
+        printTrace: (line) => traceLines.add(line ?? ''),
+      );
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+
+      final shellFuture = client.shell(localInitialWindowSize: 64 * 1024);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        traceLines.where(
+          (line) =>
+              line.contains('SSH_Message_Channel_Open') &&
+              line.contains('initialWindowSize: 65536'),
+        ),
+        isNotEmpty,
+      );
+
+      client.handleTransportClosedForTesting();
+      await expectLater(shellFuture, throwsA(isA<SSHStateError>()));
+      socket.destroy();
+    });
+
+    test('shell rejects non-positive local initial window size', () async {
+      final socket = _MockSSHSocket();
+      final client = SSHClient(
+        socket,
+        username: 'test',
+        keepAliveInterval: null,
+      );
+
+      client.handlePacket(SSH_Message_Userauth_Success().encode());
+
+      await expectLater(
+        () => client.shell(localInitialWindowSize: 0),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.name,
+            'name',
+            'localInitialWindowSize',
+          ),
+        ),
+      );
 
       socket.destroy();
     });
