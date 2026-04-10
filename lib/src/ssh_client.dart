@@ -11,6 +11,7 @@ import 'package:dartssh2/src/ssh_errors.dart';
 import 'package:dartssh2/src/ssh_forward.dart';
 import 'package:dartssh2/src/ssh_keepalive.dart';
 import 'package:dartssh2/src/ssh_key_pair.dart';
+import 'package:dartssh2/src/ssh_local_forward.dart';
 import 'package:dartssh2/src/ssh_session.dart';
 import 'package:dartssh2/src/ssh_transport.dart';
 import 'package:dartssh2/src/utils/async_queue.dart';
@@ -295,6 +296,35 @@ class SSHClient {
       remotePort,
     );
     return SSHForwardChannel(channelController.channel);
+  }
+
+  /// Bind a local TCP listener and forward accepted connections to
+  /// [remoteHost]:[remotePort] through SSH.
+  ///
+  /// This helper is only available on native platforms with `dart:io`.
+  /// On web targets it throws [UnsupportedError].
+  Future<SSHLocalForwardServer> bindLocalForward(
+    String remoteHost,
+    int remotePort, {
+    String localHost = '127.0.0.1',
+    int? localPort,
+  }) async {
+    await _authenticated.future;
+
+    return await bindLocalForwardServer(
+      localHost: localHost,
+      localPort: localPort,
+      remoteHost: remoteHost,
+      remotePort: remotePort,
+      openChannel: (originatorHost, originatorPort) {
+        return forwardLocal(
+          remoteHost,
+          remotePort,
+          localHost: originatorHost,
+          localPort: originatorPort,
+        );
+      },
+    );
   }
 
   /// Execute [command] on the remote side. Returns a [SSHChannel] that can be

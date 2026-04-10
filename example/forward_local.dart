@@ -17,15 +17,16 @@ void main(List<String> args) async {
 
   await client.authenticated;
 
-  final serverSocket = await ServerSocket.bind('localhost', 8080);
+  final forward = await client.bindLocalForward(
+    'httpbin.org',
+    80,
+    localHost: '127.0.0.1',
+    localPort: 8080,
+  );
 
-  print('Listening on ${serverSocket.address.address}:${serverSocket.port}');
+  print('Listening on ${forward.localHost}:${forward.localPort}');
 
-  await for (final socket in serverSocket) {
-    final forward = await client.forwardLocal('httpbin.org', 80);
-    forward.stream.cast<List<int>>().pipe(socket);
-    socket.cast<List<int>>().pipe(forward.sink);
-  }
+  await forward.done;
 
   client.close();
   await client.done;

@@ -39,3 +39,17 @@ class SSHForwardChannel implements SSHSocket {
     _channel.destroy();
   }
 }
+
+abstract class SSHLocalForwardServer {
+  String get localHost;
+
+  int get localPort;
+
+  String get remoteHost;
+
+  int get remotePort;
+
+  Future<void> get done;
+
+  Future<void> close();
+}

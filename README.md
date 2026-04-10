@@ -174,12 +174,14 @@ Processes killed by signals do not have an exit code, instead they have an exit 
 
 ```dart
 void main() async {
-  final serverSocket = await ServerSocket.bind('localhost', 8080);
-  await for (final socket in serverSocket) {
-    final forward = await client.forwardLocal('httpbin.org', 80);
-    forward.stream.cast<List<int>>().pipe(socket);
-    socket.pipe(forward.sink);
-  }
+  final forward = await client.bindLocalForward(
+    'httpbin.org',
+    80,
+    localHost: '127.0.0.1',
+    localPort: 8080,
+  );
+
+  print('Listening on ${forward.localHost}:${forward.localPort}');
 }
 ```
 
